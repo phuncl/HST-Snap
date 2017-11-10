@@ -8,8 +8,10 @@ import csv
 import glob
 
 
-def get_donorfile():
-	# list all <something> separated variable files in dir, and pick one
+def get_filelist():
+	"""
+	list all <something> separated variable files in dir, and pick one
+	"""
 	flist = glob.glob('*sv')
 	for i,nam in enumerate(flist):
 		print("{}\t{}".format(i,nam))
@@ -23,9 +25,13 @@ def get_donorfile():
 	return fn
 
 
-def master_data_reader():
-	# read in HST combined data to memory
-	with open("HST_compiled_data.csv", 'r') as fin:
+def master_reader():
+	"""
+	read in master csv data file to memory
+	"""
+	print("\n\nChoose MASTER data file to update.")
+	filnam = get_filelist()
+	with open(filnam, 'r') as fin:
 		frd = csv.reader(fin, delimiter = ',')
 		heads = next(frd)
 		dats = list(frd)
@@ -34,10 +40,12 @@ def master_data_reader():
 
 
 def generic_reader(fn):
-	# for a given file, open and print one line
-	# ask for delimiter characters
-	# get headers and data
-	print("\nOpening {}".format(fname))
+	"""
+	for a given file, open and print one line
+	ask for delimiter characters
+	get headers and data
+	"""
+	print("\nOpening {}".format(fn))
 	print("First line of file reads:")
 	with open(fn, 'r') as fin:
 		print(fin.readline())
@@ -47,16 +55,28 @@ def generic_reader(fn):
 	
 	with open(fn, 'r') as fin:
 		frd = csv.reader(fin, delimiter = delim)
-		heads = next(frd)
-		dats = list(frd)
+		hds = next(frd)
+		dts = list(frd)
 		# strip leading/trailing whitespace for all lines
-		dats = [[x.strip() for x in y] for y in dats]
+		dts = [[x.strip() for x in y] for y in dts]
 
-	return heads, dats
+	return hds, dts
+	
+
+def donor_reader():
+	"""
+	read in donor data file tp memory
+	"""
+	print("\nChoose DONOR data file to include in master.")
+	fname = get_filelist()
+	
+	return generic_reader(fname)
 
 
 def head_lookup(donor_h, main_h):
-	# create lookup dictionary for inputted headers
+	"""
+	create lookup dictionary for inputted headers
+	"""
 	h_dict = {}
 	for h in donor_h:
 		resp = ""
@@ -78,16 +98,33 @@ def head_lookup(donor_h, main_h):
 	return h_dict
 
 
-def star_listing(donor_dat, mst_dat):
-	# Create dict of star:new-line-index
-	# for all donor file stars in hst data
-	mst_names = [x[0] for x in mst_dat]
-	donor_names = [y[0] for y in donor_dat]
+def star_listing(donor_dat, mst_dat, mode):
+	"""
+	Create dict of star:new-line-index
+	for all donor file stars in hst data
+	"""
+	mst_nam = [w[0] for w in mst_dat]
+	if not mode:
+		mst_id = mst_nam
+	else:
+		mst_id = [x[mode].strip() for x in mst_dat]
+	donor_id = [y[0] for y in donor_dat]
 		
 	name_dict = {}
-	for s in mst_names:
-		if s in donor_names:
-			name_dict[s] = donor_names.index(s)
+	for num, iden in enumerate(mst_id):
+		if not iden:
+			print("Skipping a case of missing identifier!")
+			continue
+		idlist = [i for i,xchk in enumerate(donor_id) if iden in xchk]
+		if len(idlist) == 1:
+			name_dict[mst_nam[num]] = idlist[0]
+		elif len(idlist) == 0:
+			pass
+		else:
+			print("Multiple matching entried found for {}".format(iden))
+			for j,q in enumerate(idlist): print(j, donor_dat[q])
+			indx = int(input("Give index of preferred match: "))
+			name_dict[mst_nam[num]] == idlist[indx]
 	
 	return name_dict
 
@@ -115,15 +152,6 @@ def pointone_test(x, y, proximity = 0.1):
 		return False
 
 
-def save_master_csvfile(headers, data_lists, mst_name):
-	# write headers and data to master file
-	with open(mst_name, 'w') as fout:
-		fwrt = csv.writer(fout, delimiter = ',')
-		fwrt.writerow(headers)
-		fwrt.writerows(data_lists)
-	print("Data saved to {}!".format(mst_name))
-
-
 def get_filename():
 	# Get savename from user
 	# check only 1 extension given
@@ -134,18 +162,39 @@ def get_filename():
 	return fnm
 
 
-############################  MAIN  ####################################
+def save_master_csvfile(headers, data_lists, mst_name):
+	# write headers and data to master file
+	with open(mst_name, 'w') as fout:
+		fwrt = csv.writer(fout, delimiter = ',')
+		fwrt.writerow(headers)
+		fwrt.writerows(data_lists)
+	print("Data saved to {}!".format(mst_name))
+
+
+# MAIN  ################################################################
+
+# get master file
+master_heads, master_data =  master_reader()
 # get donor file
-fname = get_donorfile()
 
 # define new headers and new data
-donor_heads, donor_data = generic_reader(fname)
-master_heads, master_data =  master_data_reader()
+donor_heads, donor_data = donor_reader()
 
 # obtain cross reference dictionary for headers and for stars
-# do not pass Obj_name as that is reference point
-cross_ref = head_lookup(donor_heads[1:], master_heads)
-star_ref = star_listing(donor_data, master_data)
+cross_ref = head_lookup(donor_heads, master_heads)
+# need option to look up by coordinates #########################################
+sortmode = ""
+print("Donor file has star identifiers such as:")
+eg = [donor_data[x][0] for x in [3,6,9]]
+for l in eg: print(l)
+
+while sortmode not in ("n", "c"):
+	sortmode = input("Choose star sorting mode - names or coordinates (n/c): ").lower()
+if sortmode == "n":
+	sortmode = 0
+elif sortmode == "c":
+	sortmode = 4
+star_ref = star_listing(donor_data, master_data, sortmode)
 
 # get desired file savename
 out_name = get_filename()
